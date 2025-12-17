@@ -113,6 +113,12 @@ def prepare(infer_path):
     img = cv2.imread(infer_path)[:, :, :3]
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     
+    # [DEBUG] Crop center 2048x2048 để test nhanh
+    h, w, _ = img.shape
+    if h > 2048 and w > 2048:
+        img = img[h//2 : h//2 + 2048, w//2 : w//2 + 2048, :]
+    print(f"[DEBUG] Cropped image size: {img.shape}")
+    
     return img, utils.crop(img, crop_sz, step)
 
 
@@ -159,12 +165,18 @@ def infer(image_filepath, label_filepath, size=256):
         im = im.to(device)
         
         with torch.no_grad():
-            pred = model(im) # Logits hoặc Probabilities
+            pred = model(im) # Kết quả là (1, 4) chứa xác suất của 4 lớp
         
-        # --- QUAN TRỌNG: Lưu probability map (HxWx4) thay vì index để tránh lỗi combine ---
-        # Resize output về kích thước patch (thường model output ra size nhỏ hơn hoặc bằng)
-        pred_prob = F.interpolate(pred, size=(size, size), mode='bilinear', align_corners=False)
-        pred_prob = pred_prob.permute(0, 2, 3, 1).cpu().numpy().squeeze(0) # (256, 256, 4)
+        # --- SỬA LẠI ĐOẠN NÀY ---
+        # Thay vì interpolate, ta "nhân bản" vector (1, 4) thành ảnh (256, 256, 4)
+        # B1: Thêm 2 chiều không gian (1, 4, 1, 1)
+        pred_expanded = pred.unsqueeze(-1).unsqueeze(-1) 
+        
+        # B2: Mở rộng ra size (1, 4, 256, 256)
+        pred_expanded = pred_expanded.expand(-1, -1, size, size)
+        
+        # B3: Chuyển trục về (256, 256, 4) để khớp với hàm combine phía sau
+        pred_prob = pred_expanded.permute(0, 2, 3, 1).cpu().numpy().squeeze(0)
         
         preds_list.append(pred_prob)
 

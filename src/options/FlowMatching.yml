@@ -1,0 +1,44 @@
+name: FM_Latent_L4_SanityCheck
+gpu_ids: [0]
+
+# Cấu hình Latent Flow Matching
+flow_matching:
+  unet_params:
+    image_size: 64       # Latent size (256 / 4 = 64)
+    in_channels: 6       # 3 (noisy latent) + 3 (condition latent)
+    model_channels: 192  # Tăng channel (L4 mạnh)
+    out_channels: 3      # Output velocity field (cùng chiều latent)
+    num_res_blocks: 2
+    attention_resolutions: [4, 2] # Attention ở 16x16 và 32x32
+    dropout: 0.1
+    channel_mult: [1, 2, 4]
+    conv_resample: True
+    dims: 2
+    num_heads: 4
+    use_scale_shift_norm: True
+
+# Cấu hình VQGAN (Chuẩn f4)
+VQGAN:
+  params:
+    embed_dim: 3
+    n_embed: 8192
+    ckpt_path: ./checkpoints/vqgan/model.ckpt # Đường dẫn file vừa tải
+    ddconfig:
+      double_z: false
+      z_channels: 3
+      resolution: 256
+      in_channels: 3
+      out_ch: 3
+      ch: 128
+      ch_mult: [1, 2, 4]
+      num_res_blocks: 2
+      attn_resolutions: []
+      dropout: 0.0
+    lossconfig:
+      target: torch.nn.Identity
+
+train:
+  lr: 2e-4
+  total_steps: 2000 # Khoảng 5-10 phút trên L4 cho 3 ảnh
+  log_freq: 50
+  batch_size: 16    # Tận dụng 24GB VRAM
